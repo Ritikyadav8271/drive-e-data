@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Closed-form Linear Regression Visualization</title>
+  <style>
+    :root{--bg:#0f1724;--panel:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--good:#34d399}
+    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:linear-gradient(180deg,#071024 0%, #081229 100%);color:#e6eef8}
+    .wrap{display:flex;gap:18px;align-items:flex-start;padding:18px}
+    .canvas-wrap{background:var(--panel);padding:12px;border-radius:8px;box-shadow:0 6px 20px rgba(2,6,23,0.6)}
+    canvas{display:block;background:#071227;border-radius:6px}
+    .info{max-width:420px}
+    .card{background:rgba(255,255,255,0.03);padding:12px;border-radius:8px}
+    h1{margin:0 0 8px 0;font-size:18px}
+    p{margin:6px 0;color:var(--muted);font-size:13px}
+    .formula{background:rgba(255,255,255,0.02);padding:10px;border-radius:6px;margin-top:8px}
+    .controls{display:flex;gap:8px;margin-top:10px}
+    button{background:var(--accent);color:#042037;border:0;padding:8px 10px;border-radius:6px;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+    .small{font-size:12px;color:var(--muted)}
+    .tooltip{position:absolute;padding:6px 8px;background:#051827;border:1px solid rgba(255,255,255,0.04);border-radius:6px;color:#dff3ff;pointer-events:none;font-size:12px}
+    .footer{margin-top:12px;font-size:13px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="canvas-wrap card">
+      <canvas id="plot" width="760" height="480"></canvas>
+      <div id="tooltip" class="tooltip" style="display:none"></div>
+    </div>
+
+    <div class="info">
+      <div class="card">
+        <h1>Closed-form Linear Regression (Least Squares)</h1>
+        <p>This visualization uses the closed-form solution to find the best-fit line (Method 1): we compute slope <span class="small">m</span> and intercept <span class="small">b</span> that minimize the sum of squared residuals.</p>
+        <div class="formula">
+          <div><strong>Residual</strong>: vertical difference r_i = y_i - (m x_i + b)</div>
+          <div style="margin-top:6px"><strong>Objective</strong>: minimize SSE = Σ r_i^2</div>
+          <div style="margin-top:8px"><strong>Closed-form</strong> solution:</div>
+          <div class="small">m = cov(x,y) / var(x)</div>
+          <div class="small">b = ȳ - m·x̄</div>
+        </div>
+
+        <div class="controls">
+          <button id="restart">Animate to Best-fit</button>
+          <button id="shuffle" class="secondary">Shuffle Points</button>
+        </div>
+
+        <div class="footer" id="stats">SSE: — | slope m: — | intercept b: —</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Sample dataset (x,y) showing a roughly linear trend
+    const canvas = document.getElementById('plot');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+
+    const padding = {l:60,r:20,t:20,b:50};
+    const W = canvas.width, H = canvas.height;
+    let points = generateSample();
+
+    function generateSample(){
+      // A simple set of points with some noise
+      return [
+        [1,2.1],[2,2.8],[3,3.6],[4,4.1],[5,5.0],[6,5.8],[7,6.7],[8,7.3],[9,8.2],[10,9.0]
+      ].map(p => [p[0], p[1] + (Math.random()-0.5)*0.8]);
+    }
+
+    function computeClosedForm(pts){
+      const n = pts.length;
+      let sx=0, sy=0;
+      for(const [x,y] of pts){sx+=x; sy+=y}
+      const xm = sx/n, ym = sy/n;
+      let num=0, den=0;
+      for(const [x,y] of pts){ num += (x-xm)*(y-ym); den += (x-xm)*(x-xm); }
+      const m = den===0?0:num/den;
+      const b = ym - m*xm;
+      return {m,b,xm,ym};
+    }
+
+    function toCanvas([x,y]){
+      // data ranges: x from 0..11, y from 0..11 roughly
+      const xScale = (W - padding.l - padding.r) / 11;
+      const yScale = (H - padding.t - padding.b) / 11;
+      const cx = padding.l + x * xScale;
+      const cy = H - padding.b - y * yScale;
+      return [cx,cy];
+    }
+
+    function drawAxes(){
+      ctx.clearRect(0,0,W,H);
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      // x-axis
+      ctx.beginPath(); ctx.moveTo(padding.l, H-padding.b); ctx.lineTo(W-padding.r, H-padding.b); ctx.stroke();
+      // y-axis
+      ctx.beginPath(); ctx.moveTo(padding.l, padding.t); ctx.lineTo(padding.l, H-padding.b); ctx.stroke();
+      // ticks and labels
+      ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.font = '11px sans-serif'; ctx.textAlign='center';
+      for(let i=0;i<=10;i++){ const x = padding.l + i*(W-padding.l-padding.r)/10; ctx.fillText(i+1, x, H-padding.b+16); }
+      ctx.textAlign='right';
+      for(let i=0;i<=10;i++){ const y = H-padding.b - i*(H-padding.t-padding.b)/10; ctx.fillText(i+1, padding.l-8, y+4); }
+    }
+
+    function drawPoints(){
+      for(const p of points){ const [cx,cy]=toCanvas(p); drawPoint(cx,cy); }
+    }
+
+    function drawPoint(x,y){ ctx.fillStyle='#7dd3fc'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.stroke(); }
+
+    function drawLineFromParams(m,b,alpha=1,stroke='#60a5fa'){ // draw across canvas
+      const x0 = 0, x1 = 11;
+      const [sx,sy] = toCanvas([x0, m*x0 + b]);
+      const [ex,ey] = toCanvas([x1, m*x1 + b]);
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = stroke; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    function drawResiduals(m,b){
+      ctx.strokeStyle = 'rgba(255,99,132,0.9)'; ctx.fillStyle='rgba(255,99,132,0.9)';
+      ctx.lineWidth = 1.5; ctx.setLineDash([4,6]);
+      for(const [x,y] of points){
+        const [px,py] = toCanvas([x,y]);
+        const pred = m*x + b; const [cx,cy] = toCanvas([x,pred]);
+        // vertical dashed line
+        ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(cx,cy); ctx.stroke();
+        // residual label
+        const res = (y - pred).toFixed(2);
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font='11px sans-serif'; ctx.fillText(res, px + 8, (py+cy)/2 - 6);
+      }
+      ctx.setLineDash([]);
+    }
+
+    function sseFor(m,b){ let s=0; for(const [x,y] of points){const r = y - (m*x+b); s += r*r;} return s; }
+
+    // Animation: interpolate from an initial guess to closed-form result
+    let animating = false;
+    function animateToBest(){ if(animating) return; animating=true;
+      const target = computeClosedForm(points);
+      const initial = {m:0.0, b:target.ym};
+      const duration = 1800; // ms
+      const start = performance.now();
+      function frame(now){
+        const t = Math.min(1, (now-start)/duration);
+        const ease = t<0.5 ? 2*t*t : -1 + (4-2*t)*t; // smooth-ish
+        const mcur = initial.m*(1-ease) + target.m*ease;
+        const bcur = initial.b*(1-ease) + target.b*ease;
+        drawAxes(); drawPoints(); drawLineFromParams(mcur,bcur,1,'#a5b4fc'); drawResiduals(mcur,bcur);
+        document.getElementById('stats').textContent = `SSE: ${sseFor(mcur,bcur).toFixed(3)} | slope m: ${mcur.toFixed(3)} | intercept b: ${bcur.toFixed(3)}`;
+        if(t<1){ requestAnimationFrame(frame); } else { animating=false; // final clear and draw final
+          drawAxes(); drawPoints(); drawLineFromParams(target.m,target.b,1,'#60a5fa'); drawResiduals(target.m,target.b);
+          document.getElementById('stats').textContent = `SSE: ${sseFor(target.m,target.b).toFixed(3)} | slope m: ${target.m.toFixed(3)} | intercept b: ${target.b.toFixed(3)}`;
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // Render initial view: axes + points + no residuals
+    function renderInitial(){ drawAxes(); drawPoints(); const best = computeClosedForm(points); drawLineFromParams(best.m,best.b,0.35,'#334155'); document.getElementById('stats').textContent = `SSE: ${sseFor(best.m,best.b).toFixed(3)} | slope m: ${best.m.toFixed(3)} | intercept b: ${best.b.toFixed(3)}`; }
+
+    // Interactivity: tooltip showing nearest point and residual to current best-fit
+    canvas.addEventListener('mousemove', (ev)=>{
+      const rect = canvas.getBoundingClientRect(); const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+      let nearest = null, nd = 999;
+      for(const p of points){ const [cx,cy]=toCanvas(p); const d = Math.hypot(cx-mx,cy-my); if(d<nd){ nd=d; nearest={p,cx,cy}; }}
+      if(nearest && nd < 12){ // show tooltip
+        const [x,y] = nearest.p; const best = computeClosedForm(points); const pred = best.m*x + best.b; const res = (y-pred).toFixed(3);
+        tooltip.style.display='block'; tooltip.style.left = (nearest.cx+12) + 'px'; tooltip.style.top = (nearest.cy-8) + 'px';
+        tooltip.innerHTML = `<div><strong>(${x.toFixed(2)}, ${y.toFixed(2)})</strong></div><div class='small'>pred: ${pred.toFixed(2)}</div><div class='small'>residual: ${res}</div>`;
+      } else { tooltip.style.display='none'; }
+    });
+
+    canvas.addEventListener('mouseleave', ()=>{ tooltip.style.display='none'; });
+
+    document.getElementById('restart').addEventListener('click', ()=>{ animateToBest(); });
+    document.getElementById('shuffle').addEventListener('click', ()=>{ points = generateSample(); renderInitial(); });
+
+    // initial draw
+    renderInitial();
+
+    // draw once to include residuals for best fit after a short pause
+    setTimeout(()=>{ const bf = computeClosedForm(points); drawAxes(); drawPoints(); drawLineFromParams(bf.m,bf.b,1,'#60a5fa'); drawResiduals(bf.m,bf.b); document.getElementById('stats').textContent = `SSE: ${sseFor(bf.m,bf.b).toFixed(3)} | slope m: ${bf.m.toFixed(3)} | intercept b: ${bf.b.toFixed(3)}`; }, 120);
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Least Squares Error Minimization</title>
+  <style>
+    body { font-family: Arial; }
+    canvas {
+      border: 2px solid black;
+      background: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Simple Linear Regression – Least Squares Visualization</h2>
+<canvas id="canvas" width="600" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+// Data points
+const data = [
+  {x: 50, y: 300},
+  {x: 100, y: 260},
+  {x: 150, y: 230},
+  {x: 200, y: 180},
+  {x: 250, y: 150}
+];
+
+// Compute means
+const xMean = data.reduce((s,p)=>s+p.x,0)/data.length;
+const yMean = data.reduce((s,p)=>s+p.y,0)/data.length;
+
+// Closed-form least squares
+let num = 0, den = 0;
+data.forEach(p => {
+  num += (p.x - xMean) * (p.y - yMean);
+  den += (p.x - xMean) ** 2;
+});
+
+const m = num / den;
+const b = yMean - m * xMean;
+
+// Draw points
+function drawPoints() {
+  ctx.fillStyle = "blue";
+  data.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// Draw best-fit line
+function drawLine() {
+  ctx.strokeStyle = "green";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, b);
+  ctx.lineTo(600, m * 600 + b);
+  ctx.stroke();
+}
+
+// Draw residuals & squared error boxes
+function drawErrors() {
+  ctx.strokeStyle = "red";
+  ctx.fillStyle = "rgba(255,0,0,0.2)";
+  data.forEach(p => {
+    let yPred = m * p.x + b;
+
+    // Residual line
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x, yPred);
+    ctx.stroke();
+
+    // Squared error box
+    let size = Math.abs(p.y - yPred);
+    ctx.fillRect(p.x, Math.min(p.y, yPred), size, size);
+  });
+}
+
+// Draw everything
+drawPoints();
+drawLine();
+drawErrors();
+</script>
+
+</body>
+</html>

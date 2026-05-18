@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Linear Regression Animation</title>
+  <style>
+    canvas {
+      border: 2px solid black;
+      background: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Linear Regression – Gradient Descent Animation</h2>
+<canvas id="canvas" width="600" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+// Training data
+const data = [
+  {x: 50, y: 300},
+  {x: 100, y: 260},
+  {x: 150, y: 220},
+  {x: 200, y: 180},
+  {x: 250, y: 140}
+];
+
+// Model parameters
+let m = Math.random();
+let b = Math.random();
+const lr = 0.00001;
+
+// Draw points
+function drawPoints() {
+  ctx.fillStyle = "blue";
+  data.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// Draw regression line
+function drawLine() {
+  ctx.strokeStyle = "red";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, m * 0 + b);
+  ctx.lineTo(600, m * 600 + b);
+  ctx.stroke();
+}
+
+// Gradient Descent Step
+function train() {
+  let dm = 0;
+  let db = 0;
+
+  data.forEach(p => {
+    const y_pred = m * p.x + b;
+    dm += (y_pred - p.y) * p.x;
+    db += (y_pred - p.y);
+  });
+
+  dm = (2 / data.length) * dm;
+  db = (2 / data.length) * db;
+
+  m -= lr * dm;
+  b -= lr * db;
+}
+
+// Animation loop
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawPoints();
+  drawLine();
+  train();
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>3D Gradient Descent Visualization</title>
+  <style>
+    canvas {
+      border: 2px solid black;
+      background: #fafafa;
+    }
+  </style>
+</head>
+<body>
+
+<h2>3D Loss Surface: m vs b vs Loss</h2>
+<canvas id="canvas" width="700" height="500"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+// Dataset
+const data = [
+  {x: 1, y: 1},
+  {x: 2, y: 2},
+  {x: 3, y: 2.5},
+  {x: 4, y: 4}
+];
+
+// Initial parameters
+let m = Math.random() * 4 - 2;
+let b = Math.random() * 4 - 2;
+const lr = 0.05;
+
+// Loss function
+function loss(m, b) {
+  let sum = 0;
+  data.forEach(p => {
+    let yPred = m * p.x + b;
+    sum += (yPred - p.y) ** 2;
+  });
+  return sum / data.length;
+}
+
+// Gradients
+function gradients() {
+  let dm = 0, db = 0;
+  data.forEach(p => {
+    let error = (m * p.x + b) - p.y;
+    dm += error * p.x;
+    db += error;
+  });
+  dm *= 2 / data.length;
+  db *= 2 / data.length;
+  return { dm, db };
+}
+
+// 3D to 2D projection
+function project(x, y, z) {
+  let scale = 80;
+  let px = canvas.width / 2 + (x - y) * scale;
+  let py = canvas.height / 2 + (x + y) * scale / 2 - z * scale;
+  return { x: px, y: py };
+}
+
+// Draw loss surface (wireframe)
+function drawSurface() {
+  ctx.strokeStyle = "#ccc";
+  for (let mi = -3; mi <= 3; mi += 0.5) {
+    for (let bi = -3; bi <= 3; bi += 0.5) {
+      let z = loss(mi, bi) * 0.1;
+      let p = project(mi, bi, z);
+      ctx.strokeRect(p.x, p.y, 1, 1);
+    }
+  }
+}
+
+// Draw current point
+function drawPoint() {
+  let z = loss(m, b) * 0.1;
+  let p = project(m, b, z);
+  ctx.fillStyle = "red";
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Gradient Descent step
+function step() {
+  let { dm, db } = gradients();
+  m -= lr * dm;
+  b -= lr * db;
+}
+
+// Animation
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawSurface();
+  drawPoint();
+  step();
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+
+</body>
+</html>

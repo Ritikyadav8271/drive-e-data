@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CGPA vs Package – Gradient Descent Animation</title>
+  <style>
+    body { font-family: Arial; }
+    canvas {
+      border: 2px solid black;
+      background: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Simple Linear Regression (Gradient Descent)</h2>
+<p id="info"></p>
+<canvas id="canvas" width="700" height="500"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const info = document.getElementById("info");
+
+// ===== DATASET (CGPA vs Package) =====
+const data = [
+  {x: 6.89, y: 3.26},
+  {x: 5.12, y: 1.98},
+  {x: 7.82, y: 3.25},
+  {x: 7.42, y: 3.67},
+  {x: 6.94, y: 3.57}
+];
+
+// Scale for visualization
+const xScale = 70;
+const yScale = 80;
+const xOffset = 50;
+const yOffset = 450;
+
+// ===== INITIAL PARAMETERS =====
+let m = 0;
+let b = 0;
+const lr = 0.01;
+
+// ===== DRAW POINTS =====
+function drawPoints() {
+  ctx.fillStyle = "blue";
+  data.forEach(p => {
+    const x = p.x * xScale + xOffset;
+    const y = yOffset - p.y * yScale;
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// ===== DRAW REGRESSION LINE =====
+function drawLine() {
+  ctx.strokeStyle = "red";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+
+  const x1 = 5;
+  const y1 = m * x1 + b;
+
+  const x2 = 9;
+  const y2 = m * x2 + b;
+
+  ctx.moveTo(x1 * xScale + xOffset, yOffset - y1 * yScale);
+  ctx.lineTo(x2 * xScale + xOffset, yOffset - y2 * yScale);
+  ctx.stroke();
+}
+
+// ===== LOSS =====
+function computeLoss() {
+  let loss = 0;
+  data.forEach(p => {
+    const yPred = m * p.x + b;
+    loss += Math.pow(yPred - p.y, 2);
+  });
+  return loss / data.length;
+}
+
+// ===== GRADIENT DESCENT STEP =====
+function train() {
+  let dm = 0;
+  let db = 0;
+  const n = data.length;
+
+  data.forEach(p => {
+    const yPred = m * p.x + b;
+    dm += (yPred - p.y) * p.x;
+    db += (yPred - p.y);
+  });
+
+  dm = (2 / n) * dm;
+  db = (2 / n) * db;
+
+  m -= lr * dm;
+  b -= lr * db;
+}
+
+// ===== ANIMATION LOOP =====
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawPoints();
+  drawLine();
+  train();
+
+  info.innerHTML =
+    `Slope (m): ${m.toFixed(4)} | Intercept (b): ${b.toFixed(4)} | Loss: ${computeLoss().toFixed(4)}`;
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+
+</body>
+</html>
